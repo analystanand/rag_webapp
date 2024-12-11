@@ -4,6 +4,9 @@ import torch
 from transformers import AutoTokenizer, AutoModelForQuestionAnswering, pipeline
 from sentence_transformers import SentenceTransformer
 import numpy as np
+# In your app.py, add these lines to handle Hugging Face model downloads
+import os
+os.environ['TRANSFORMERS_CACHE'] = './model_cache'
 
 class PDFRAGApp:
     def __init__(self):
