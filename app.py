@@ -4,11 +4,8 @@ import torch
 from transformers import AutoTokenizer, AutoModelForQuestionAnswering, pipeline
 from sentence_transformers import SentenceTransformer
 import numpy as np
-# In your app.py, add these lines to handle Hugging Face model downloads
-import os
-os.environ['TRANSFORMERS_CACHE'] = './model_cache'
 
-class PDFRAGApp:
+class RAGApplication:
     def __init__(self):
         # Initialize models
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -55,25 +52,41 @@ class PDFRAGApp:
         return result['answer']
 
 def main():
-    st.title("PDF RAG Question Answering App")
+    st.title("RAG Question Answering App")
+    
+    # Sidebar for input method selection
+    input_method = st.sidebar.radio(
+        "Choose Input Method", 
+        ["PDF Upload", "Direct Text Input"]
+    )
     
     # Instantiate the RAG application
-    rag_app = PDFRAGApp()
+    rag_app = RAGApplication()
     
-    # PDF Upload
-    uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
+    # Text or PDF input
+    if input_method == "PDF Upload":
+        # PDF Upload
+        uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
+        if uploaded_file is not None:
+            # Extract text
+            text = rag_app.extract_text_from_pdf(uploaded_file)
+            st.success("PDF Uploaded and Processed!")
+    else:
+        # Direct Text Input
+        text = st.text_area(
+            "Enter your text", 
+            height=250, 
+            placeholder="Paste the text you want to query..."
+        )
     
-    if uploaded_file is not None:
-        # Extract text
-        pdf_text = rag_app.extract_text_from_pdf(uploaded_file)
-        st.success("PDF Uploaded and Processed!")
-        
+    # Proceed if text is available
+    if 'text' in locals() and text:
         # Chunk and embed text
-        chunks = rag_app.chunk_text(pdf_text)
+        chunks = rag_app.chunk_text(text)
         embeddings = rag_app.create_embeddings(chunks)
         
         # Question Input
-        query = st.text_input("Ask a question about the PDF")
+        query = st.text_input("Ask a question about the text")
         
         if query:
             # Find most relevant chunk
@@ -86,8 +99,16 @@ def main():
             st.subheader("Answer:")
             st.write(answer)
             
-            st.subheader("Context:")
+            st.subheader("Relevant Context:")
             st.write(relevant_chunk)
+
+    # Additional information
+    st.sidebar.markdown("### How to Use")
+    st.sidebar.info(
+        "1. Choose input method (PDF or Text)\n"
+        "2. Upload PDF or paste text\n"
+        "3. Ask a question about the content"
+    )
 
 if __name__ == "__main__":
     main()
