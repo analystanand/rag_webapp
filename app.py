@@ -1,7 +1,6 @@
 import streamlit as st
-import PyPDF2
 import torch
-from transformers import AutoModelForQuestionAnswering, pipeline
+from transformers import pipeline
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
@@ -22,14 +21,6 @@ class RAGComparison:
             model="deepset/roberta-base-squad2",
             tokenizer="deepset/roberta-base-squad2"
         )
-    
-    def extract_text_from_pdf(self, uploaded_file):
-        """Extract text from uploaded PDF"""
-        pdf_reader = PyPDF2.PdfReader(uploaded_file)
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text() or ""
-        return text
     
     def chunk_text(self, text, chunk_size=200, overlap=50):
         """Split text into overlapping chunks"""
@@ -72,74 +63,67 @@ class RAGComparison:
 def main():
     st.title("RAG vs Zero-Shot Comparison")
     
-    # Sidebar for input method selection
-    input_method = st.sidebar.radio(
-        "Choose Input Method", 
-        ["PDF Upload", "Direct Text Input"]
-    )
+    # Sample Story
+    sample_story = """
+    In the small town of Riverdale, Emma Johnson was a dedicated local veterinarian who ran a unique animal rescue center. One winter, she rescued a three-legged dog named Max from an abandoned warehouse. Max had been severely injured, and Emma spent months rehabilitating him. Despite his disability, Max became a symbol of resilience in the community, helping other injured animals and inspiring local children about compassion and overcoming challenges.
+
+    Emma's rescue center was funded entirely by local donations and her own savings. She worked tirelessly, often staying up all night to care for injured animals. Her most memorable rescue was Max, who not only recovered but became a therapy dog, visiting schools and hospitals to spread hope and awareness about animal welfare.
+    """
+    
+    # Display the story
+    st.subheader("Sample Story")
+    st.write(sample_story)
     
     # Instantiate the RAG application
     rag_app = RAGComparison()
     
-    # Text or PDF input
-    if input_method == "PDF Upload":
-        # PDF Upload
-        uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
-        if uploaded_file is not None:
-            # Extract text
-            text = rag_app.extract_text_from_pdf(uploaded_file)
-            st.success("PDF Uploaded and Processed!")
-    else:
-        # Direct Text Input
-        text = st.text_area(
-            "Enter your text", 
-            height=250, 
-            placeholder="Paste the text you want to query..."
-        )
+    # Chunk and embed text
+    chunks = rag_app.chunk_text(sample_story)
+    embeddings = rag_app.create_embeddings(chunks)
     
-    # Proceed if text is available
-    if 'text' in locals() and text:
-        # Chunk and embed text
-        chunks = rag_app.chunk_text(text)
-        embeddings = rag_app.create_embeddings(chunks)
+    # Predefined questions
+    questions = [
+        "Who is Emma Johnson?",
+        "What happened to Max?",
+        "How does Max help the community?"
+    ]
+    
+    # Question Selection
+    query = st.selectbox("Choose a question about the story", questions)
+    
+    if query:
+        # Comparison Container
+        col1, col2 = st.columns(2)
         
-        # Question Input
-        query = st.text_input("Ask a question about the text")
+        with col1:
+            st.subheader("Zero-Shot Response")
+            st.warning("Response without context")
+            
+            # Generate Zero-Shot Response
+            zero_shot_response = rag_app.generate_zero_shot_response(query)
+            st.write(zero_shot_response)
         
-        if query:
-            # Comparison Container
-            col1, col2 = st.columns(2)
+        with col2:
+            st.subheader("RAG Response")
+            st.success("Response with context")
             
-            with col1:
-                st.subheader("Zero-Shot Response")
-                st.warning("Response without context")
-                
-                # Generate Zero-Shot Response
-                zero_shot_response = rag_app.generate_zero_shot_response(query)
-                st.write(zero_shot_response)
+            # Find most relevant chunk
+            relevant_chunk = rag_app.find_most_relevant_chunk(query, chunks, embeddings)
             
-            with col2:
-                st.subheader("RAG Response")
-                st.success("Response with context")
-                
-                # Find most relevant chunk
-                relevant_chunk = rag_app.find_most_relevant_chunk(query, chunks, embeddings)
-                
-                # Generate RAG Response
-                rag_response = rag_app.generate_rag_response(relevant_chunk, query)
-                st.write(rag_response)
-            
-            # Show Relevant Context
-            with st.expander("See Relevant Context"):
-                st.write(relevant_chunk)
+            # Generate RAG Response
+            rag_response = rag_app.generate_rag_response(relevant_chunk, query)
+            st.write(rag_response)
+        
+        # Show Relevant Context
+        with st.expander("See Relevant Context"):
+            st.write(relevant_chunk)
 
     # Additional information
     st.sidebar.markdown("### How to Use")
     st.sidebar.info(
-        "1. Choose input method (PDF or Text)\n"
-        "2. Upload PDF or paste text\n"
-        "3. Ask a question about the content\n"
-        "4. Compare Zero-Shot vs RAG responses"
+        "1. Read the sample story\n"
+        "2. Select a question\n"
+        "3. Compare Zero-Shot vs RAG responses"
     )
 
 if __name__ == "__main__":
