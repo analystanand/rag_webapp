@@ -117,8 +117,8 @@ def main():
     
     # Text input based on mode
     if input_mode == "Default Story":
-        st.subheader("Sample Story")
-        st.write(sample_story)
+        st.subheader("Sample Report")
+        st.markdown(sample_story)
         text = sample_story
     elif input_mode == "Direct Text Input":
         text = st.text_area(
