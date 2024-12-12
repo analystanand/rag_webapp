@@ -91,9 +91,19 @@ def main():
     
     # Sample Story
     sample_story = """
-    In the small town of Riverdale, Emma Johnson was a dedicated local veterinarian who ran a unique animal rescue center. One winter, she rescued a three-legged dog named Max from an abandoned warehouse. Max had been severely injured, and Emma spent months rehabilitating him. Despite his disability, Max became a symbol of resilience in the community, helping other injured animals and inspiring local children about compassion and overcoming challenges.
+    Titanic Survival Prediction Model Report
+        Data Preprocessing
+            The dataset underwent careful preprocessing, which involved handling missing values, encoding categorical variables, and normalizing numerical features to prepare the data for machine learning analysis.
+        Model: XGBoost Classifier
+            Features and Importance
+            The XGBoost model revealed a clear hierarchy of feature importance in predicting passenger survival. Fare emerged as the most critical feature, accounting for the highest importance score of 0.352. This was closely followed by Age, which contributed 0.276 to the model's predictive power. Gender (Sex) ranked third with an importance score of 0.215, demonstrating its significant impact on survival chances. Passenger class (Pclass) contributed 0.097 to the model, while the embarkation point (Embarked) played a minor role with 0.038. Familial connections through Sibling/Spouse (SibSp) and Parent/Child (Parch) relationships had the least influence, with scores of 0.022 and 0.010 respectively.
+         Model Performance Metrics
+            The XGBoost classifier demonstrated robust performance across multiple evaluation metrics. The model achieved an overall accuracy of 85%, with precision and recall both hovering around 0.83. The F1 score of 0.83 indicates a balanced performance between precision and recall, while the AUC-ROC score of 0.89 suggests strong predictive capabilities in distinguishing between survival and non-survival scenarios.
+        Key Insights
+            Fare and passenger class emerged as the most critical predictors of survival, indicating the significant role of socioeconomic factors during the Titanic disaster. Gender played a crucial role in survival probability, with clear disparities in rescue rates. Age was found to be the second most important feature, suggesting that a passenger's age significantly influenced their chances of survival.
+        Recommendations
+            To enhance the model's predictive power, researchers should consider incorporating more detailed passenger information. Exploring ensemble methods could potentially improve model performance. Additionally, validating the model against additional historical datasets would provide further robustness to the analysis.
 
-    Emma's rescue center was funded entirely by local donations and her own savings. She worked tirelessly, often staying up all night to care for injured animals. Her most memorable rescue was Max, who not only recovered but became a therapy dog, visiting schools and hospitals to spread hope and awareness about animal welfare.
     """
     
     # Instantiate the RAG application
