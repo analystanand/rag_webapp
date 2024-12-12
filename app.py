@@ -1,19 +1,21 @@
 import streamlit as st
+import PyPDF2
 import torch
-from transformers import pipeline
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
 class RAGComparison:
     def __init__(self):
-        # Initialize models
+        # Initialize models with explicit configuration
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         
-        # QA Model without context
-        self.zero_shot_model = pipeline(
-            "text-generation", 
-            model="gpt2"
-        )
+        # Load tokenizer and model explicitly
+        self.zero_shot_tokenizer = AutoTokenizer.from_pretrained("gpt2")
+        self.zero_shot_model = AutoModelForCausalLM.from_pretrained("gpt2")
+        
+        # Configure tokenizer
+        self.zero_shot_tokenizer.pad_token = self.zero_shot_tokenizer.eos_token
         
         # QA Model with context
         self.rag_model = pipeline(
@@ -21,6 +23,14 @@ class RAGComparison:
             model="deepset/roberta-base-squad2",
             tokenizer="deepset/roberta-base-squad2"
         )
+    
+    def extract_text_from_pdf(self, uploaded_file):
+        """Extract text from uploaded PDF"""
+        pdf_reader = PyPDF2.PdfReader(uploaded_file)
+        text = ""
+        for page in pdf_reader.pages:
+            text += page.extract_text() or ""
+        return text
     
     def chunk_text(self, text, chunk_size=200, overlap=50):
         """Split text into overlapping chunks"""
@@ -44,12 +54,28 @@ class RAGComparison:
     
     def generate_zero_shot_response(self, query):
         """Generate response without context"""
-        response = self.zero_shot_model(
+        # Explicitly handle tokenization and generation
+        inputs = self.zero_shot_tokenizer(
             query, 
+            return_tensors="pt", 
+            truncation=True,
+            max_length=50
+        )
+        
+        # Generate text
+        outputs = self.zero_shot_model.generate(
+            inputs.input_ids, 
             max_length=150, 
             num_return_sequences=1,
-            do_sample=True
-        )[0]['generated_text']
+            do_sample=True,
+            pad_token_id=self.zero_shot_tokenizer.eos_token_id
+        )
+        
+        # Decode the generated text
+        response = self.zero_shot_tokenizer.decode(
+            outputs[0], 
+            skip_special_tokens=True
+        )
         return response
     
     def generate_rag_response(self, context, query):
@@ -61,7 +87,7 @@ class RAGComparison:
         return result['answer']
 
 def main():
-    st.title("RAG vs Zero-Shot Comparison")
+    st.title("Multi-Mode RAG Comparison")
     
     # Sample Story
     sample_story = """
@@ -70,60 +96,77 @@ def main():
     Emma's rescue center was funded entirely by local donations and her own savings. She worked tirelessly, often staying up all night to care for injured animals. Her most memorable rescue was Max, who not only recovered but became a therapy dog, visiting schools and hospitals to spread hope and awareness about animal welfare.
     """
     
-    # Display the story
-    st.subheader("Sample Story")
-    st.write(sample_story)
-    
     # Instantiate the RAG application
     rag_app = RAGComparison()
     
-    # Chunk and embed text
-    chunks = rag_app.chunk_text(sample_story)
-    embeddings = rag_app.create_embeddings(chunks)
+    # Input Method Selection
+    input_mode = st.sidebar.radio(
+        "Choose Input Mode", 
+        ["Default Story", "Direct Text Input", "PDF Upload"]
+    )
     
-    # Predefined questions
-    questions = [
-        "Who is Emma Johnson?",
-        "What happened to Max?",
-        "How does Max help the community?"
-    ]
+    # Text input based on mode
+    if input_mode == "Default Story":
+        st.subheader("Sample Story")
+        st.write(sample_story)
+        text = sample_story
+    elif input_mode == "Direct Text Input":
+        text = st.text_area(
+            "Enter your text", 
+            height=250, 
+            placeholder="Paste the text you want to query..."
+        )
+    else:  # PDF Upload
+        uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
+        if uploaded_file is not None:
+            text = rag_app.extract_text_from_pdf(uploaded_file)
+            st.success("PDF Uploaded and Processed!")
+        else:
+            text = ""
     
-    # Question Selection
-    query = st.selectbox("Choose a question about the story", questions)
-    
-    if query:
-        # Comparison Container
-        col1, col2 = st.columns(2)
+    # Proceed if text is available
+    if text:
+        # Chunk and embed text
+        chunks = rag_app.chunk_text(text)
+        embeddings = rag_app.create_embeddings(chunks)
         
-        with col1:
-            st.subheader("Zero-Shot Response")
-            st.warning("Response without context")
-            
-            # Generate Zero-Shot Response
-            zero_shot_response = rag_app.generate_zero_shot_response(query)
-            st.write(zero_shot_response)
+        # Predefined questions
+        questions = st.text_input("Enter your question about the text")
         
-        with col2:
-            st.subheader("RAG Response")
-            st.success("Response with context")
+        if questions:
+            # Comparison Container
+            col1, col2 = st.columns(2)
             
-            # Find most relevant chunk
-            relevant_chunk = rag_app.find_most_relevant_chunk(query, chunks, embeddings)
+            with col1:
+                st.subheader("Zero-Shot (Without RAG)")
+                st.warning("Response without context")
+                
+                # Generate Zero-Shot Response
+                zero_shot_response = rag_app.generate_zero_shot_response(questions)
+                st.write(zero_shot_response)
             
-            # Generate RAG Response
-            rag_response = rag_app.generate_rag_response(relevant_chunk, query)
-            st.write(rag_response)
-        
-        # Show Relevant Context
-        with st.expander("See Relevant Context"):
-            st.write(relevant_chunk)
+            with col2:
+                st.subheader("RAG Response")
+                st.success("Response with context")
+                
+                # Find most relevant chunk
+                relevant_chunk = rag_app.find_most_relevant_chunk(questions, chunks, embeddings)
+                
+                # Generate RAG Response
+                rag_response = rag_app.generate_rag_response(relevant_chunk, questions)
+                st.write(rag_response)
+            
+            # Show Relevant Context
+            with st.expander("See Relevant Context"):
+                st.write(relevant_chunk)
 
     # Additional information
     st.sidebar.markdown("### How to Use")
     st.sidebar.info(
-        "1. Read the sample story\n"
-        "2. Select a question\n"
-        "3. Compare Zero-Shot vs RAG responses"
+        "1. Choose input mode\n"
+        "2. Enter text or upload PDF\n"
+        "3. Ask a question\n"
+        "4. Compare Zero-Shot vs RAG responses"
     )
 
 if __name__ == "__main__":
