@@ -1,15 +1,23 @@
 import streamlit as st
 import PyPDF2
 import torch
-from transformers import AutoTokenizer, AutoModelForQuestionAnswering, pipeline
+from transformers import AutoModelForQuestionAnswering, pipeline
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
-class RAGApplication:
+class RAGComparison:
     def __init__(self):
         # Initialize models
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-        self.qa_model = pipeline(
+        
+        # QA Model without context
+        self.zero_shot_model = pipeline(
+            "text-generation", 
+            model="gpt2"
+        )
+        
+        # QA Model with context
+        self.rag_model = pipeline(
             "question-answering", 
             model="deepset/roberta-base-squad2",
             tokenizer="deepset/roberta-base-squad2"
@@ -43,16 +51,26 @@ class RAGApplication:
         most_similar_idx = np.argmax(similarities)
         return chunks[most_similar_idx]
     
-    def answer_question(self, context, query):
-        """Answer question based on context"""
-        result = self.qa_model({
+    def generate_zero_shot_response(self, query):
+        """Generate response without context"""
+        response = self.zero_shot_model(
+            query, 
+            max_length=150, 
+            num_return_sequences=1,
+            do_sample=True
+        )[0]['generated_text']
+        return response
+    
+    def generate_rag_response(self, context, query):
+        """Generate response with context using RAG"""
+        result = self.rag_model({
             'context': context,
             'question': query
         })
         return result['answer']
 
 def main():
-    st.title("RAG Question Answering App")
+    st.title("RAG vs Zero-Shot Comparison")
     
     # Sidebar for input method selection
     input_method = st.sidebar.radio(
@@ -61,7 +79,7 @@ def main():
     )
     
     # Instantiate the RAG application
-    rag_app = RAGApplication()
+    rag_app = RAGComparison()
     
     # Text or PDF input
     if input_method == "PDF Upload":
@@ -89,25 +107,39 @@ def main():
         query = st.text_input("Ask a question about the text")
         
         if query:
-            # Find most relevant chunk
-            relevant_chunk = rag_app.find_most_relevant_chunk(query, chunks, embeddings)
+            # Comparison Container
+            col1, col2 = st.columns(2)
             
-            # Generate answer
-            answer = rag_app.answer_question(relevant_chunk, query)
+            with col1:
+                st.subheader("Zero-Shot Response")
+                st.warning("Response without context")
+                
+                # Generate Zero-Shot Response
+                zero_shot_response = rag_app.generate_zero_shot_response(query)
+                st.write(zero_shot_response)
             
-            # Display results
-            st.subheader("Answer:")
-            st.write(answer)
+            with col2:
+                st.subheader("RAG Response")
+                st.success("Response with context")
+                
+                # Find most relevant chunk
+                relevant_chunk = rag_app.find_most_relevant_chunk(query, chunks, embeddings)
+                
+                # Generate RAG Response
+                rag_response = rag_app.generate_rag_response(relevant_chunk, query)
+                st.write(rag_response)
             
-            st.subheader("Relevant Context:")
-            st.write(relevant_chunk)
+            # Show Relevant Context
+            with st.expander("See Relevant Context"):
+                st.write(relevant_chunk)
 
     # Additional information
     st.sidebar.markdown("### How to Use")
     st.sidebar.info(
         "1. Choose input method (PDF or Text)\n"
         "2. Upload PDF or paste text\n"
-        "3. Ask a question about the content"
+        "3. Ask a question about the content\n"
+        "4. Compare Zero-Shot vs RAG responses"
     )
 
 if __name__ == "__main__":
